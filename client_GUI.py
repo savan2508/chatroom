@@ -28,28 +28,51 @@ BYTESIZE = 1024
 global client_socket
 
 
+class Connection():
+    """Create a connection class for client socket - a client socket and pertinent methods"""
+
+    def __init__(self):
+        """Initialize a client socket"""
+        pass
+
+
 # Define functions
-def connect():
+def connect(connection):
     """Connect to a server at a given ip/port address"""
     pass
 
 
-def verify_connection(name):
-    """Verify that the server connection is valid and pass required information"""
+def disconnect(connection):
+    """Disconnect from the current server"""
     pass
 
 
-def disconnect():
-    """Disconnect from the server"""
+def gui_start():
+    """Start the connection process by updating the GUI"""
     pass
 
 
-def send_message():
-    """Send a message to the server to be broadcast"""
+def gui_end():
+    """Disconnect from the server by updating the GUI"""
     pass
 
 
-def receive_message():
+def create_message(flag, name, message, color):
+    """Create and return a message to be broadcast to all clients"""
+    pass
+
+
+def process_message(connection, message_json):
+    """Process a message received from a client"""
+    pass
+
+
+def send_message(connection):
+    """Send a message to the server"""
+    pass
+
+
+def receive_message(connection):
     """Receive an incoming message from the server"""
     pass
 

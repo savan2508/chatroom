@@ -13,6 +13,7 @@ root.resizable(False, False)
 my_font = ('Sim sun', 14)
 black = "#010101"
 light_green = "#1fc742"
+red = "#ff3855"
 root.config(bg=black)
 
 
@@ -22,13 +23,39 @@ class Connection():
 
     def __init__(self):
         """Initialize a server socket"""
-        pass
+        self.host_ip = socket.gethostbyname(socket.gethostname())
+        self.encoder = 'utf-8'
+        self.bytesize = 1024
+
+        self.client_sockets = []
+        self.client_ips = []
+        self.banned_ips = []
 
 
 # Define functions
 def start_server(connection):
     """Start the server socket"""
-    pass
+    # Get the port number from the server and attach it to the connection object
+    connection.port = int(port_entry.get())
+
+    # Create a server socket
+    connection.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    connection.server_socket.bind((connection.host_ip, connection.port))
+    connection.server_socket.listen()
+
+    # update the GUI
+    history_listbox.delete(0, END)
+    history_listbox.insert(0, f"Server started on {connection.host_ip}:{connection.port}")
+    end_button.config(state=NORMAL)
+    stat_button.config(state=DISABLED)
+    self_broadcast_button.config(state=NORMAL)
+    message_button.config(state=NORMAL)
+    kick_button.config(state=NORMAL)
+    ban_button.config(state=NORMAL)
+
+    # Create a thread to accept incoming connections
+    connect_thread = threading.Thread(target=connect_client, args=(connection,))
+    connect_thread.start()
 
 
 def end_server(connection):
@@ -38,22 +65,89 @@ def end_server(connection):
 
 def connect_client(connection):
     """Connect a client to the server socket"""
-    pass
+    while True:
+        try:
+            client_socket, client_address = connection.server_socket.accept()
+
+            # Check if the client is banned
+            if client_address[0] in connection.banned_ips:
+                message_packet = create_message("DISCONNECT", "Admin (Private)",
+                                                "You are banned from this server...BYE", red)
+                message_json = json.dumps(message_packet)
+                client_socket.send(message_json.encode(connection.encoder))
+
+                # Close the client socket
+                client_socket.close()
+
+            else:
+                # Send a message packet to receive the client's info
+                message_packet = create_message("INFO", "Admin (Private)",
+                                                "Please enter your name and color...", light_green)
+                message_json = json.dumps(message_packet)
+                client_socket.send(message_json.encode(connection.encoder))
+
+                # wait for the confirmation message to be sent validating the connection
+                message_json = client_socket.recv(connection.bytesize)
+                process_message(connection, message_json, client_socket, client_address)
+
+        except:
+            break
 
 
 def create_message(flag, name, message, color):
     """Create and return a message to be broadcast to all clients"""
-    pass
+    message_package = {
+        "flag": flag,
+        "name": name,
+        "message": message,
+        "color": color
+    }
+    return message_package
 
 
 def process_message(connection, message_json, client_socket, client_address=(0, 0)):
     """Process a message received from a client"""
-    pass
+    message_packet = json.loads(message_json)
+
+    flag = message_packet["flag"]
+    name = message_packet["name"]
+    message = message_packet["message"]
+    color = message_packet["color"]
+
+    if flag == "INFO":
+        # Add the client to the client list
+        connection.client_sockets.append(client_socket)
+        connection.client_ips.append(client_address[0])
+
+        # Broadcast the message to all clients that new client has connected
+        message_packet = create_message("MESSAGE", "Admin (Broadcast)",
+                                        f"{name} has joined the chat!", light_green)
+        message_json = json.dumps(message_packet)
+        broadcast_message(connection, message_json.encode(connection.encoder))
+
+        # Update the server GUI
+        client_listbox.insert(END, f"Name: {name}   IP Addr: {client_address[0]}")
+
+        # Create a thread to receive messages from the client
+        receive_thread = threading.Thread(target=receive_message, args=(connection, client_socket,))
+        receive_thread.start()
+
+    elif flag == "MESSAGE":
+        pass
+
+    elif flag == "DISCONNECT":
+        pass
+
+    else:
+        # Catch all for invalid messages
+        history_listbox.insert(0, f"Invalid message received!  {flag} is not a valid flag!")
 
 
 def broadcast_message(connection, message_json):
-    """Broadcast a message to all clients"""
-    pass
+    """Broadcast a message to all clients...All clients will receive the message
+    ...ALL JSON ARE ENCODED"""
+    for client_socket in connection.client_sockets:
+        client_socket.send(message_json)
 
 
 def receive_message(connection, client_socket):
@@ -104,7 +198,7 @@ admin_frame.pack(pady=5)
 port_label = tkinter.Label(connection_frame, text="Port:", font=my_font, bg=black, fg=light_green)
 port_entry = tkinter.Entry(connection_frame, font=my_font, bg=black, fg=light_green, width=10, borderwidth=3)
 stat_button = tkinter.Button(connection_frame, text="Start Server", font=my_font, bg=light_green, fg=black,
-                             borderwidth=3, width=15)
+                             borderwidth=3, width=15, command=lambda: start_server(my_connection))
 end_button = tkinter.Button(connection_frame, text="End Server", font=my_font, bg=light_green, fg=black,
                             borderwidth=3, width=15, state=DISABLED)
 
@@ -154,5 +248,6 @@ kick_button.grid(row=0, column=1, padx=5, pady=5)
 ban_button.grid(row=0, column=2, padx=5, pady=5)
 unban_button.grid(row=0, column=3, padx=5, pady=5)
 
-# Run the root window's main loop
+# Create a connection object and run the window loop
+my_connection = Connection()
 root.mainloop()
