@@ -1,4 +1,5 @@
 # Client side GUI chat room
+import json
 import tkinter, socket, threading
 from tkinter import DISABLED, VERTICAL, END, NORMAL
 
@@ -33,13 +34,34 @@ class Connection():
 
     def __init__(self):
         """Initialize a client socket"""
-        pass
+        self.encoder = ENCODER
+        self.bytesize = BYTESIZE
 
 
 # Define functions
 def connect(connection):
     """Connect to a server at a given ip/port address"""
-    pass
+    # Clear any previous messages
+    my_listbox.delete(0, END)
+
+    # Get required information from a connection object
+    connection.name = name_entry.get()
+    connection.target_ip = ip_entry.get()
+    connection.port = int(port_entry.get())
+    connection.color = color.get()
+
+    try:
+        # Create a client socket
+        connection.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connection.client_socket.connect((connection.target_ip, connection.port))
+
+        # Create a thread to receive messages
+        message_json = connection.client_socket.recv(connection.bytesize)
+        process_message(connection, message_json)
+
+    except:
+        # Update the GUI
+        my_listbox.insert(0, "Error connecting to server")
 
 
 def disconnect(connection):
@@ -49,7 +71,15 @@ def disconnect(connection):
 
 def gui_start():
     """Start the connection process by updating the GUI"""
-    pass
+    connect_button.config(state=DISABLED)
+    disconnect_button.config(state=NORMAL)
+    name_entry.config(state=DISABLED)
+    ip_entry.config(state=DISABLED)
+    port_entry.config(state=DISABLED)
+    send_button.config(state=NORMAL)
+
+    for button in color_buttons:
+        button.config(state=DISABLED)
 
 
 def gui_end():
@@ -64,7 +94,21 @@ def create_message(flag, name, message, color):
 
 def process_message(connection, message_json):
     """Process a message received from a client"""
-    pass
+    # Update the chat history by unpacking the json message
+    message_packet = json.loads(message_json)
+    message = message_packet['message']
+    flag = message_packet['flag']
+    name = message_packet['name']
+    color = message_packet['color']
+
+    if flag == "INFO":
+        # Server is asking for information to varify connection. Send the info.
+        message_packet = create_message("INFO", connection.name, "Joins the server", connection.color)
+        message_json = json.dumps(message_packet)
+        connection.client_socket.send(message_json.encode(connection.encoder))
+
+        # Enable the GUI buttons
+        gui_start()
 
 
 def send_message(connection):
@@ -97,7 +141,7 @@ ip_entry = tkinter.Entry(info_frame, borderwidth=3, font=my_font)
 port_label = tkinter.Label(info_frame, text="Port Num:", font=my_font, fg=light_green, bg=black)
 port_entry = tkinter.Entry(info_frame, borderwidth=3, font=my_font, width=10)
 connect_button = tkinter.Button(info_frame, text="Connect", font=my_font, bg=light_green,
-                                borderwidth=5, width=10, command=connect)
+                                borderwidth=5, width=10, command=lambda: connect(my_connection))
 disconnect_button = tkinter.Button(info_frame, text="Disconnect", font=my_font, bg=light_green,
                                    borderwidth=5, width=10, state=DISABLED, command=disconnect)
 
@@ -155,5 +199,6 @@ send_button = tkinter.Button(input_frame, text="send", borderwidth=5, width=10, 
 input_entry.grid(row=0, column=0, padx=10, pady=5)
 send_button.grid(row=0, column=1, padx=5, pady=5)
 
-# Run the root window's loop
+# Create a connection instance and start the GUI
+my_connection = Connection()
 root.mainloop()
