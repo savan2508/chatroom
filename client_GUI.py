@@ -66,7 +66,13 @@ def connect(connection):
 
 def disconnect(connection):
     """Disconnect from the current server"""
-    pass
+    # Create a message to send to the server
+    message_packet = create_message("DISCONNECT", connection.name, "I am leaving", connection.color)
+    message_json = json.dumps(message_packet)
+    connection.client_socket.send(message_json.encode(connection.encoder))
+
+    # Disable the GUI buttons
+    gui_end()
 
 
 def gui_start():
@@ -84,12 +90,27 @@ def gui_start():
 
 def gui_end():
     """Disconnect from the server by updating the GUI"""
-    pass
+    connect_button.config(state=NORMAL)
+    disconnect_button.config(state=DISABLED)
+    name_entry.config(state=NORMAL)
+    ip_entry.config(state=NORMAL)
+    port_entry.config(state=NORMAL)
+    send_button.config(state=DISABLED)
+
+    for button in color_buttons:
+        button.config(state=NORMAL)
 
 
 def create_message(flag, name, message, color):
     """Create and return a message to be broadcast to all clients"""
-    pass
+    message_packet = {
+        'flag': flag,
+        'name': name,
+        'message': message,
+        'color': color
+    }
+
+    return message_packet
 
 
 def process_message(connection, message_json):
@@ -102,7 +123,7 @@ def process_message(connection, message_json):
     color = message_packet['color']
 
     if flag == "INFO":
-        # Server is asking for information to varify connection. Send the info.
+        # The Server is asking for information to varify connection. Send the info.
         message_packet = create_message("INFO", connection.name, "Joins the server", connection.color)
         message_json = json.dumps(message_packet)
         connection.client_socket.send(message_json.encode(connection.encoder))
@@ -110,15 +131,48 @@ def process_message(connection, message_json):
         # Enable the GUI buttons
         gui_start()
 
+        # Create a thread to continuously receive messages from the server
+        receive_thread = threading.Thread(target=receive_message, args=(connection,))
+        receive_thread.start()
+
+    elif flag == "MESSAGE":
+        # The Server is sending a message to be displayed
+        my_listbox.insert(0, f"{name}: {message}")
+        my_listbox.itemconfig(0, fg=color)
+
+    elif flag == "DISCONNECT":
+        # The Server is disconnecting the client
+        my_listbox.insert(0, f"{name}: {message}")
+        my_listbox.itemconfig(0, fg=color)
+        disconnect(connection)
+
+    else:
+        # Catch all for errors
+        my_listbox.insert(0, f"Invalid message received!  {flag} is not a valid flag!")
+
 
 def send_message(connection):
     """Send a message to the server"""
-    pass
+    # Send the message to the server
+    message_packet = create_message("MESSAGE", connection.name, input_entry.get(), connection.color)
+    message_json = json.dumps(message_packet)
+    connection.client_socket.send(message_json.encode(connection.encoder))
+
+    # Clear the input field
+    input_entry.delete(0, END)
 
 
 def receive_message(connection):
     """Receive an incoming message from the server"""
-    pass
+    while True:
+        try:
+            # Receive the incoming message packet
+            message_json = connection.client_socket.recv(connection.bytesize)
+            process_message(connection, message_json)
+        except:
+            # can't receive a message, a client has probably disconnected and break the loop
+            my_listbox.insert(0, "Connection to server lost! Disconnecting...")
+            break
 
 
 # Define GUI Layout
@@ -143,7 +197,7 @@ port_entry = tkinter.Entry(info_frame, borderwidth=3, font=my_font, width=10)
 connect_button = tkinter.Button(info_frame, text="Connect", font=my_font, bg=light_green,
                                 borderwidth=5, width=10, command=lambda: connect(my_connection))
 disconnect_button = tkinter.Button(info_frame, text="Disconnect", font=my_font, bg=light_green,
-                                   borderwidth=5, width=10, state=DISABLED, command=disconnect)
+                                   borderwidth=5, width=10, state=DISABLED, command=lambda: disconnect(my_connection))
 
 name_label.grid(row=0, column=0, padx=2, pady=10)
 name_entry.grid(row=0, column=1, padx=2, pady=10)
@@ -194,7 +248,7 @@ my_scrollbar.grid(row=0, column=1, sticky="NS")
 # Input frame Layout
 input_entry = tkinter.Entry(input_frame, width=55, borderwidth=3, font=my_font)
 send_button = tkinter.Button(input_frame, text="send", borderwidth=5, width=10, font=my_font,
-                             bg=light_green, command=send_message)
+                             bg=light_green, command=lambda: send_message(my_connection))
 
 input_entry.grid(row=0, column=0, padx=10, pady=5)
 send_button.grid(row=0, column=1, padx=5, pady=5)

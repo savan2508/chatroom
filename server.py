@@ -2,6 +2,7 @@
 import tkinter, socket, threading, json
 from tkinter import DISABLED, VERTICAL, END, NORMAL
 
+
 # Define window
 root = tkinter.Tk()
 root.title("Chat Server")
@@ -60,7 +61,22 @@ def start_server(connection):
 
 def end_server(connection):
     """Begin the shutdown process for the server socket"""
-    pass
+    # Alert all clients that the server is shutting down
+    message_packet = create_message("DISCONNECT", "Admin (Broadcast)", "Server is shutting down!", red)
+    message_json = json.dumps(message_packet)
+    broadcast_message(connection, message_json.encode(connection.encoder))
+
+    # Update the GUI
+    history_listbox.insert(0, f"Server is shutting down on port {connection.port}!")
+    end_button.config(state=DISABLED)
+    stat_button.config(state=NORMAL)
+    self_broadcast_button.config(state=DISABLED)
+    message_button.config(state=DISABLED)
+    kick_button.config(state=DISABLED)
+    ban_button.config(state=DISABLED)
+
+    # Close all client sockets
+    connection.server_socket.close()
 
 
 def connect_client(connection):
@@ -133,10 +149,31 @@ def process_message(connection, message_json, client_socket, client_address=(0, 
         receive_thread.start()
 
     elif flag == "MESSAGE":
-        pass
+        # Broadcast the message to all clients
+        message_packet = create_message("MESSAGE", name, message, color)
+        message_json = json.dumps(message_packet)
+        broadcast_message(connection, message_json.encode(connection.encoder))
+
+        # Update the server GUI
+        history_listbox.insert(0, f"{name}: {message}")
+        history_listbox.itemconfig(0, fg=color)
 
     elif flag == "DISCONNECT":
-        pass
+        # Close the client socket and remove
+        index = connection.client_sockets.index(client_socket)
+        connection.client_sockets.remove(client_socket)
+        connection.client_ips.pop(index)
+        client_listbox.delete(index)
+        client_socket.close()
+
+        # Broadcast the message to all clients
+        message_packet = create_message("MESSAGE", "Admin (Broadcast)",
+                                        f"{name} has left the chat!", light_green)
+        message_json = json.dumps(message_packet)
+        broadcast_message(connection, message_json.encode(connection.encoder))
+
+        # Update the server UI
+        history_listbox.insert(0, f"Admin (Broadcast): {name} has left the chat!")
 
     else:
         # Catch all for invalid messages
@@ -152,32 +189,77 @@ def broadcast_message(connection, message_json):
 
 def receive_message(connection, client_socket):
     """Receive an incoming message from a client"""
-    pass
+    while True:
+        # Get a message from the client
+        try:
+            message_json = client_socket.recv(connection.bytesize)
+            process_message(connection, message_json, client_socket)
+        except:
+            break
 
 
 def self_broadcast_message(connection):
     """Broadcast a message to the server GUI"""
-    pass
+    # Create a message packet
+    message_packet = create_message("MESSAGE", "Admin (Broadcast)", input_entry.get(), light_green)
+    message_json = json.dumps(message_packet)
+    broadcast_message(connection, message_json.encode(connection.encoder))
+
+    # Clear the input field
+    input_entry.delete(0, END)
 
 
 def private_message(connection):
     """Send a private message to a client"""
-    pass
+    # Select the client from the client listbox and access the client's socket
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
+
+    # Create a message packet
+    message_packet = create_message("MESSAGE", "Admin (Private)", input_entry.get(), light_green)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
+
+    # Clear the input field
+    input_entry.delete(0, END)
 
 
 def kick_client(connection):
     """Kick a client from the server"""
-    pass
+    # Select the client from the client listbox and access the client's socket
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
+
+    # Create a message packet
+    message_packet = create_message("DISCONNECT", "Admin (Private)", "You have been kicked from the server!", red)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
 
 
 def ban_client(connection):
     """Ban a client from the server based on the IP address"""
-    pass
+    # Select the client from the client listbox and access the client's socket
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
+    client_ip = connection.client_ips[index]
+
+    # Add the IP to the banned list
+    connection.banned_ips.append(client_ip)
+
+    # Create a message packet
+    message_packet = create_message("DISCONNECT", "Admin (Private)", "You have been banned from the server!", red)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
 
 
 def unban_client(connection):
     """Unban a client's IP address from the server"""
-    pass
+    # Select the client from the client listbox and access the client's socket
+    index = client_listbox.curselection()[0]
+    client_ip = connection.client_ips[index]
+
+    # Remove the IP from the banned list
+    connection.banned_ips.remove(client_ip)
 
 
 # Define GUI Layout
@@ -200,7 +282,7 @@ port_entry = tkinter.Entry(connection_frame, font=my_font, bg=black, fg=light_gr
 stat_button = tkinter.Button(connection_frame, text="Start Server", font=my_font, bg=light_green, fg=black,
                              borderwidth=3, width=15, command=lambda: start_server(my_connection))
 end_button = tkinter.Button(connection_frame, text="End Server", font=my_font, bg=light_green, fg=black,
-                            borderwidth=3, width=15, state=DISABLED)
+                            borderwidth=3, width=15, state=DISABLED, command=lambda: end_server(my_connection))
 
 port_label.grid(row=0, column=0, padx=2, pady=10)
 port_entry.grid(row=0, column=1, padx=2, pady=10)
@@ -228,20 +310,20 @@ client_scroll.grid(row=0, column=1, sticky="NS")
 # Message frame layout
 input_entry = tkinter.Entry(message_frame, width=50, font=my_font, bg=black, fg=light_green, borderwidth=3)
 self_broadcast_button = tkinter.Button(message_frame, text="Broadcast", font=my_font, bg=light_green, fg=black,
-                                       borderwidth=3, width=8)
+                                       borderwidth=3, width=8, command=lambda: self_broadcast_message(my_connection))
 
 input_entry.grid(row=0, column=0, padx=10, pady=10)
 self_broadcast_button.grid(row=0, column=1, padx=10, pady=10, ipadx=20)
 
 # Admin frame layout
 message_button = tkinter.Button(admin_frame, text="PM", font=my_font, bg=light_green, fg=black,
-                                borderwidth=3, width=10)
+                                borderwidth=3, width=10, command=lambda: private_message(my_connection))
 kick_button = tkinter.Button(admin_frame, text="Kick", font=my_font, bg=light_green, fg=black,
-                             borderwidth=3, width=10)
+                             borderwidth=3, width=10, command=lambda: kick_client(my_connection))
 ban_button = tkinter.Button(admin_frame, text="Ban", font=my_font, bg=light_green, fg=black,
-                            borderwidth=3, width=10)
+                            borderwidth=3, width=10, command=lambda: ban_client(my_connection))
 unban_button = tkinter.Button(admin_frame, text="Unban", font=my_font, bg=light_green, fg=black,
-                              borderwidth=3, width=10)
+                              borderwidth=3, width=10, command=lambda: unban_client(my_connection))
 
 message_button.grid(row=0, column=0, padx=5, pady=5)
 kick_button.grid(row=0, column=1, padx=5, pady=5)
