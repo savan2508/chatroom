@@ -1,12 +1,24 @@
 # Server side GUI chat room (admin)
 import tkinter, socket, threading, json
 from tkinter import DISABLED, VERTICAL, END, NORMAL
+import os, sys
+
+
+def resource_path(relative_path):
+    """ Get an absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores a path in _MEI PASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 # Define window
 root = tkinter.Tk()
 root.title("Chat Server")
-root.iconbitmap("message_icon.ico")
+root.iconbitmap(resource_path("message_icon.ico"))
 root.geometry("800x650")
 root.resizable(False, False)
 
